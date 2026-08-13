@@ -1,0 +1,10 @@
+build/
+*.o
+*.a
+*.so
+*.deb
+auracash-node
+auracash-wallet
+auracash-miner
+auracash-tests
+.vscode/
