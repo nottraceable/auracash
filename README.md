@@ -1,5 +1,4 @@
 # auracash
-# auracash
 
 Open Architecture Protocol Standard • Version 3.0
 AuraCash (XAC) System Architecture Specification
