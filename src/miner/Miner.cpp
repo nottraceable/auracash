@@ -17,7 +17,6 @@
 #include <atomic>
 #include <thread>
 
-// Global flag for clean exit on Ctrl+C
 std::atomic<bool> g_running{true};
 
 void signal_handler(int signal) {
@@ -38,9 +37,7 @@ struct BlockTemplate {
 std::vector<uint8_t> decode_base58(const std::string& str) {
     static const std::string pszBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     size_t zeroes = 0;
-    while (zeroes < str.size() && str[zeroes] == '1') {
-        zeroes++;
-    }
+    while (zeroes < str.size() && str[zeroes] == '1') ++zeroes;
     std::vector<uint8_t> b256((str.size() - zeroes) * 733 / 1000 + 1, 0);
     for (size_t i = zeroes; i < str.size(); ++i) {
         auto pos = pszBase58.find(str[i]);
@@ -53,9 +50,7 @@ std::vector<uint8_t> decode_base58(const std::string& str) {
         }
     }
     auto it = b256.begin();
-    while (it != b256.end() && *it == 0) {
-        it++;
-    }
+    while (it != b256.end() && *it == 0) ++it;
     std::vector<uint8_t> result(zeroes, 0x00);
     result.insert(result.end(), it, b256.end());
     return result;
@@ -112,6 +107,7 @@ bool get_block_template(rpc::RpcClient& client, BlockTemplate& bt) {
     auracash::uint256 tmp2(mrHex);
     std::memcpy(bt.merkleRoot.data(), tmp2.data, 32);
     bt.reward = static_cast<uint64_t>(obj.at("coinbasevalue").as_uint64());
+    // bits may be returned as uint64, cast safely to uint32_t
     bt.targetBits = static_cast<uint32_t>(obj.at("bits").as_uint64());
     return true;
 }
@@ -119,9 +115,9 @@ bool get_block_template(rpc::RpcClient& client, BlockTemplate& bt) {
 std::vector<uint8_t> serialize_transaction(const Transaction& tx) {
     std::vector<uint8_t> data;
     auto push4 = [&](uint32_t v) {
-        data.push_back(v & 0xFF); 
+        data.push_back(v & 0xFF);
         data.push_back((v >> 8) & 0xFF);
-        data.push_back((v >> 16) & 0xFF); 
+        data.push_back((v >> 16) & 0xFF);
         data.push_back((v >> 24) & 0xFF);
     };
     auto push8 = [&](uint64_t v) {
@@ -151,9 +147,9 @@ std::vector<uint8_t> serialize_transaction(const Transaction& tx) {
 std::vector<uint8_t> serialize_block(const Block& block) {
     std::vector<uint8_t> data;
     auto push4 = [&](uint32_t v) {
-        data.push_back(v & 0xFF); 
+        data.push_back(v & 0xFF);
         data.push_back((v >> 8) & 0xFF);
-        data.push_back((v >> 16) & 0xFF); 
+        data.push_back((v >> 16) & 0xFF);
         data.push_back((v >> 24) & 0xFF);
     };
     push4(block.header.version);
@@ -201,8 +197,7 @@ int main(int argc, char* argv[]) {
             if (positional == 0) host = arg;
             else if (positional == 1) {
                 try { port = static_cast<uint16_t>(std::stoul(arg)); } catch (...) {}
-            }
-            else if (positional == 2) payoutAddress = arg;
+            } else if (positional == 2) payoutAddress = arg;
             ++positional;
         }
     }
@@ -216,7 +211,6 @@ int main(int argc, char* argv[]) {
     auracash::rpc::RpcClient client(host, port);
     uint64_t totalBlocksMined = 0;
 
-    // Infinite Loop: Mines block after block automatically
     while (g_running) {
         auracash::BlockTemplate bt;
         if (!auracash::get_block_template(client, bt)) {

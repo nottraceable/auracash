@@ -48,6 +48,9 @@ public:
     uint64_t GetTotalSupply() const;
     void Clear();
 
+    // New getter to expose current UTXOs
+    const std::unordered_map<OutPoint, TxOut>& GetUTXOs() const { return m_utxos; }
+
 private:
     std::unordered_map<OutPoint, TxOut> m_utxos;
     std::set<OutPoint> m_spentThisBlock;

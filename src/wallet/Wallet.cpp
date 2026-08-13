@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iomanip>
 #include <cstring>
+#include <algorithm>
+#include <string>
 
 namespace auracash {
 namespace wallet {
@@ -10,20 +12,27 @@ namespace wallet {
 namespace {
 
 uint64_t parse_json_uint64(const auracash::rpc::JsonValue& val) {
-    if (val.is_uint64()) {
-        return val.as_uint64();
-    }
-    if (val.is_int64()) {
-        return static_cast<uint64_t>(val.as_int64());
-    }
+    if (val.is_uint64()) return val.as_uint64();
+    if (val.is_int64()) return static_cast<uint64_t>(val.as_int64());
     if (val.is_string()) {
-        try {
-            return std::stoull(val.as_string());
-        } catch (...) {
-            return 0;
-        }
+        try { return std::stoull(val.as_string()); } catch (...) { return 0; }
     }
     return 0;
+}
+
+std::vector<uint8_t> build_p2pkh_script(const std::string& address) {
+    std::vector<uint8_t> pkHash(20, 0);
+    if (!address.empty()) {
+        // Simple: treat raw address string bytes as script prefix with first 20 bytes as hash
+        for (size_t i = 0; i < std::min(address.size(), static_cast<size_t>(20)); ++i) {
+            pkHash[i] = static_cast<uint8_t>(address[i]);
+        }
+    }
+    std::vector<uint8_t> script = {0x76, 0xA9, 0x14};
+    script.insert(script.end(), pkHash.begin(), pkHash.end());
+    script.push_back(0x88);
+    script.push_back(0xAC);
+    return script;
 }
 
 } // namespace
@@ -82,7 +91,7 @@ bool Wallet::fetch_utxos(const std::string& address, std::vector<Utxo>& utxos) {
         
         Hash256 txid;
         std::string txidHex = obj.at("txid").as_string();
-        auracash::uint256 tmp(txidHex); 
+        auracash::uint256 tmp(txidHex);
         std::memcpy(txid.data(), tmp.data, 32);
         
         Utxo u;
@@ -96,7 +105,7 @@ bool Wallet::fetch_utxos(const std::string& address, std::vector<Utxo>& utxos) {
         } else {
             u.value = 0;
         }
-
+        
         utxos.push_back(u);
     }
     return true;
@@ -109,8 +118,6 @@ std::optional<std::string> Wallet::create_transaction(
     const uint256& privKey,
     uint64_t fee) {
 
-    (void)toAddress; // Silence unused warning
-
     std::vector<Utxo> utxos;
     if (!fetch_utxos(fromAddress, utxos)) {
         return std::nullopt;
@@ -122,8 +129,9 @@ std::optional<std::string> Wallet::create_transaction(
     std::vector<std::pair<Hash256, uint32_t>> inputs;
     uint64_t totalIn = 0;
     for (const auto& u : utxos) {
-        inputs.push_back({u.txid, u.vout});
+        inputs.emplace_back(u.txid, u.vout);
         totalIn += u.value;
+        if (totalIn >= amount + fee) break;
     }
     if (totalIn < amount + fee) {
         std::cerr << "[wallet] Insufficient funds\n";
@@ -133,7 +141,7 @@ std::optional<std::string> Wallet::create_transaction(
     Transaction tx;
     tx.version = 1;
     tx.lockTime = 0;
-    for (auto [prevHash, vout] : inputs) {
+    for (auto& [prevHash, vout] : inputs) {
         TxIn in;
         in.prevTxHash = prevHash;
         in.prevVout = vout;
@@ -141,26 +149,24 @@ std::optional<std::string> Wallet::create_transaction(
         in.sequence = 0xffffffff;
         tx.inputs.push_back(in);
     }
-    uint64_t change = totalIn - amount - fee;
     TxOut outTo;
     outTo.value = amount;
-    outTo.scriptPubKey = std::vector<uint8_t>{0x76,0xA9,0x14};
+    outTo.scriptPubKey = build_p2pkh_script(toAddress);
     tx.outputs.push_back(outTo);
+    uint64_t change = totalIn - amount - fee;
     if (change > 0) {
         TxOut outChange;
         outChange.value = change;
-        outChange.scriptPubKey = std::vector<uint8_t>{0x76,0xA9,0x14};
+        outChange.scriptPubKey = build_p2pkh_script(fromAddress);
         tx.outputs.push_back(outChange);
     }
 
     Hash256 txHash = tx.GetHash();
-
     uint256 txHashU256(txHash.data(), 32);
     Signature sig;
     if (!m_crypto.sign(txHashU256, privKey, sig)) {
         return std::nullopt;
     }
-
     std::vector<uint8_t> sigSerialized(64);
     std::memcpy(sigSerialized.data(), sig.data, 64);
     for (auto& in : tx.inputs) {

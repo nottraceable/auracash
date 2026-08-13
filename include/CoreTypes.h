@@ -22,7 +22,20 @@ inline Hash256 ToHash256(const std::vector<uint8_t>& v) {
 
 inline std::string to_hex(const Hash256& h) {
     std::string hex;
+    hex.reserve(64);
     for (uint8_t b : h) {
+        char buf[3];
+        snprintf(buf, sizeof(buf), "%02x", b);
+        hex += buf;
+    }
+    return hex;
+}
+
+// Overload for arbitrary byte containers (e.g., std::vector<uint8_t>)
+inline std::string to_hex(const std::vector<uint8_t>& data) {
+    std::string hex;
+    hex.reserve(data.size() * 2);
+    for (uint8_t b : data) {
         char buf[3];
         snprintf(buf, sizeof(buf), "%02x", b);
         hex += buf;
@@ -44,7 +57,7 @@ struct BlockHeader {
     uint32_t nonce = 0;
 
     std::vector<uint8_t> ToBytes() const {
-        std::vector<uint8_t> out(80); // 4 + 32 + 32 + 4 + 4 + 4 = 80 bytes
+        std::vector<uint8_t> out(80);
         size_t off = 0;
         auto push4 = [&](uint32_t v) {
             out[off++] = v & 0xFF;

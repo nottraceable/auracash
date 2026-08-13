@@ -32,7 +32,9 @@ Commands:
   node                  Run the AuraCash node daemon
   miner [host] [port] [address]  Run standalone miner
   wallet generatekey    Generate a new wallet key pair
-  wallet getbalance     Get wallet balance via node RPC
+  wallet getbalance <addr> Get wallet balance
+  wallet listunspent <addr> List unspent outputs
+  wallet createtx <from> <to> <amount> [fee] Create and broadcast a transaction
 USAGE
 }
 
@@ -63,6 +65,12 @@ case "$cmd" in
                 ;;
             getbalance)
                 exec auracash-wallet getbalance "$@"
+                ;;
+            listunspent)
+                exec auracash-wallet listunspent "$@"
+                ;;
+            createtx)
+                exec auracash-wallet createtx "$@"
                 ;;
             *)
                 echo "Error: unknown wallet subcommand '$sub'" >&2
